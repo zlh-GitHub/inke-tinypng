@@ -5,6 +5,9 @@ const axios = require('axios');
 const ora = require("ora"); // 主要用来实现nodejs命令行环境的loading效果，和显示各种状态的图标等
 const promiseRetry = require('promise-retry');
 const _ = require('lodash');
+const {
+  UPDATE_CONFIG_TYPE,
+} = require('./constants');
 const config = require('./config');
 const {
   maxSize, // 最大文件大小
@@ -33,10 +36,19 @@ console.warn = str => console.log('\033[33m' + str + '\033[0m');
 const root = process.cwd(); // 当前node.js进程执行时的工作目录
 
 const queue = new PQueue({
-  concurrency: downloadConcurrency,
+  concurrency: compressConcurrency,
   autoStart: false,
   timeout: 5000,
 });
+
+/**
+ * 此次压缩的数量
+ */
+let currentCompressCount = 0;
+/**
+ * 已压缩的数量
+ */
+let alreadyCompressCount = 0;
 
 /**
  * 
@@ -82,11 +94,6 @@ const getTinyImageName = filename => {
   return filename.replace(reg, old => `${old}.tiny`);
 }
 
-const UPDATE_CONFIG_TYPE = {
-  UPDATE: 'update',
-  DELETE: 'delete',
-};
-
 /**
  * 更新配置文件
  * @param {Object} action 
@@ -120,7 +127,7 @@ const updateConfig = ({
 }
 
 const commonFilter = (filename, stats) => (
-    stats.size <= maxSize &&
+    stats.size <= kb2byte(maxSize) &&
     stats.isFile() &&
     exts.includes(path.extname(filename).slice(1))
   );
@@ -188,10 +195,7 @@ const splitDirAndName = path => {
  */
 const streamToPromise = (stream) => {
   return new Promise((resolve, reject) => {
-    stream.on("end", () => {
-      console.log('end');
-      resolve();
-    });
+    stream.on("end",resolve);
     stream.on("error", reject);
   });
 };
@@ -216,9 +220,6 @@ const download = async (url, dir, imageName) => {
     const writer = createWriteStream(outputPath);
     response.data.pipe(writer);
     await streamToPromise(writer);
-    // writer.on('end', () => {
-    //   console.log('end');
-    // })
     // console.success(`【${imageName}】：图片下载成功`);
   } catch (error) {
     console.error(`【${imageName}】：下载失败，请尝试手动下载：${url}\n`)
@@ -227,7 +228,7 @@ const download = async (url, dir, imageName) => {
 
 const logCompressSuccess = (name, originSize, output) => {
   const optimized = ((1 - output.ratio) * 100).toFixed(2);
-  let log = `【${name}】：压缩成功，`;
+  let log = `${currentCompressCount ? `${++alreadyCompressCount}/${currentCompressCount}` : ''}【${name}】：压缩成功，`;
   log += `优化比例: ${optimized}% ，`;
   log += `原始大小: ${(originSize / kb2byteMuti).toFixed(2)}KB ，`;
   log += `压缩大小: ${(output.size / kb2byteMuti).toFixed(2)}KB`;
@@ -327,6 +328,8 @@ const batchFileCompress = (inputPath, options) => {
   const { minSize, deep, retain, output } = mergeOptions(config, options);
   const fullPath = basePath ? path.join(basePath, inputPath) : inputPath;
   console.log("本次执行脚本的配置：", {
+    exts,
+    maxSize,
     minSize,
     deep,
     retain,
@@ -336,17 +339,17 @@ const batchFileCompress = (inputPath, options) => {
     fullPath,
   });
   if (!existsSync(fullPath)) {
-    console.error(`文件不存在，请确认路径：${fullPath}`);
+    console.warn(`文件夹不存在，请确认路径：${fullPath}`);
     return;
   }
   const stats = statSync(fullPath);
   if (!stats.isDirectory()) {
-    console.error(`路径${fullPath}指向不是文件夹，请确认`);
+    console.warn(`路径${fullPath}指向不是文件夹，请确认`);
     return;
   }
   const fileList = getFileList(fullPath);
   const fileterList = fileFilter(fileList, minSize, deep);
-  const count = fileterList.length;
+  const count = currentCompressCount = fileterList.length;
   console.log("此次处理文件的数量:", count);
   fileterList.forEach(file => {
     queue.add(() => fileCompress(file, {

@@ -159,8 +159,15 @@
 
 
 
-const fs = require('fs');
-console.log(fs.statSync('./config.json'));
+// const fs = require('fs');
+// console.log(fs.statSync('./config.json'));
 
 
-const productPromise = () => db.collection('product').add
+// const productPromise = () => db.collection('product').add
+
+
+
+
+
+
+
