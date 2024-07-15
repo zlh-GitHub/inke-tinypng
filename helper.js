@@ -29,9 +29,9 @@ const {
   writeFileSync,
 } = require('fs');
 
-console.error = str => console.log('\033[31m' + str + '\033[0m');
-console.success = str => console.log('\033[32m' + str + '\033[0m');
-console.warn = str => console.log('\033[33m' + str + '\033[0m');
+console.error = str => console.log('\x1b[31m' + str + '\x1b[0m');
+console.success = str => console.log('\x1b[32m' + str + '\x1b[0m');
+console.warn = str => console.log('\x1b[33m' + str + '\x1b[0m');
 
 const root = process.cwd(); // 当前node.js进程执行时的工作目录
 
@@ -164,7 +164,7 @@ const fileFilter = (filenameArr, minSize = 0, deep) => {
  */
 const getAjaxOptions = IP => ({
   method: 'POST',
-  url: 'https://tinypng.com/web/shrink',
+  url: 'https://tinify.cn/backend/opt/shrink',
   headers: {
     rejectUnauthorized: false,
     "X-Forwarded-For": IP,
@@ -270,6 +270,7 @@ const fileCompress = ({
         ...options,
         data: readFileSync(filename)
       });
+      console.log(data);
       if (data.error) {
         retry();
         return;
@@ -281,6 +282,7 @@ const fileCompress = ({
         retain ? getTinyImageName(name) : name,
       );
     } catch (error) {
+      console.log(error, 2);
       number < maxRetryCount && retry();
     }
   })
