@@ -270,7 +270,6 @@ const fileCompress = ({
         ...options,
         data: readFileSync(filename)
       });
-      console.log(data);
       if (data.error) {
         retry();
         return;
@@ -282,7 +281,6 @@ const fileCompress = ({
         retain ? getTinyImageName(name) : name,
       );
     } catch (error) {
-      console.log(error, 2);
       number < maxRetryCount && retry();
     }
   })
